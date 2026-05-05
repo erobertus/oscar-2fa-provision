@@ -16,26 +16,26 @@
 -- =============================================================================
 
 -- 1) Create the user. Replace 'CHANGE_ME' before running.
-CREATE USER 'tfa_admin'@'localhost' IDENTIFIED BY 'CHANGE_ME';
+CREATE USER 'tfa_admin'@'helium.robertustech.com' IDENTIFIED BY 'MWM3qcq-vmk-exv1vyb';
 
 -- 2) Grants on the provider table — read-only.
 GRANT SELECT (provider_no, last_name, first_name, email,
               practitionerNo, team, status)
   ON `oscar_15`.`provider`
-  TO 'tfa_admin'@'localhost';
+  TO 'tfa_admin'@'helium.robertustech.com';
 
 -- 3) Grants on the security table — read for IDs and 2FA state, update
 --    only the three custom 2FA columns this project manages.
 GRANT SELECT (security_no, user_name, provider_no,
               `_EYR_2FAenabled`, `_EYR_2FASecret`, `_EYR_2FAtotp`)
   ON `oscar_15`.`security`
-  TO 'tfa_admin'@'localhost';
+  TO 'tfa_admin'@'helium.robertustech.com';
 
 GRANT UPDATE (`_EYR_2FAenabled`, `_EYR_2FASecret`, `_EYR_2FAtotp`)
   ON `oscar_15`.`security`
-  TO 'tfa_admin'@'localhost';
+  TO 'tfa_admin'@'helium.robertustech.com';
 
 FLUSH PRIVILEGES;
 
 -- 4) Verify
-SHOW GRANTS FOR 'tfa_admin'@'localhost';
+SHOW GRANTS FOR 'tfa_admin'@'helium.robertustech.com';

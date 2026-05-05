@@ -54,7 +54,7 @@ the rotation script's job), or alter the `provider` table.
 WeasyPrint needs Pango, HarfBuzz, and Cairo at runtime; the `mariadb`
 Python driver needs the MariaDB connector library to build.
 
-**AlmaLinux / RHEL / Rocky / Fedora:**
+**AlmaLinux / RHEL / Rocky 8** (and Fedora derivatives still on Pango 1.42):
 
 ```sh
 sudo dnf install -y python3-pip python3-devel \
@@ -63,6 +63,11 @@ sudo dnf install -y python3-pip python3-devel \
                     gdk-pixbuf2 libffi-devel \
                     mariadb-connector-c-devel gcc
 ```
+
+**AlmaLinux / RHEL / Rocky 9** and **Fedora 36+**:
+same as above. The pinned WeasyPrint version (see below) works on
+both old and new Pango, so a single package list covers all RHEL
+derivatives.
 
 **Debian / Ubuntu:**
 
@@ -75,8 +80,22 @@ sudo apt install -y python3-pip python3-venv python3-dev \
 ```
 
 The `*-devel` / `*-dev` packages are only needed while installing
-`mariadb` and (sometimes) `weasyprint` from pip — you can remove them
-afterwards if you're tight on disk.
+`mariadb` from pip — you can remove them afterwards if you're tight on
+disk.
+
+### Note on WeasyPrint version
+
+`requirements.txt` pins WeasyPrint to **52.5**. AlmaLinux 8 ships
+Pango 1.42, but WeasyPrint 53 and later require Pango 1.44 features
+(symbols like `pango_context_set_round_glyph_positions`). Without a
+backport of newer Pango — which on RHEL-family distros is invasive —
+WeasyPrint 53+ crashes at PDF render time with
+`AttributeError: function/symbol '...' not found in library`.
+
+WeasyPrint 52.5 produces visually identical PDFs for the limited CSS
+this project uses, so the pin is the cleanest fix. If you ever need a
+newer WeasyPrint feature (e.g. for a different project on the same
+host), upgrade Pango first or run that project on a newer host.
 
 ## Installation
 
