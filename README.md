@@ -45,15 +45,38 @@ the rotation script's job), or alter the `provider` table.
 - **Python 3.8+** with `pip`.
 - **MariaDB / MySQL** access to the OSCAR database, ideally via a
   dedicated `tfa_admin` user (see `sql/01_create_tfa_admin.sql`).
-- **WeasyPrint** native dependencies. On Debian/Ubuntu:
-  ```sh
-  sudo apt update
-  sudo apt install -y python3-pip python3-venv \
-       libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b
-  ```
 - **An SMTP relay** the host can reach.
 - (Optional) An NTP-synced clock — TOTP only works correctly when the
   server's time is right.
+
+### System packages
+
+WeasyPrint needs Pango, HarfBuzz, and Cairo at runtime; the `mariadb`
+Python driver needs the MariaDB connector library to build.
+
+**AlmaLinux / RHEL / Rocky / Fedora:**
+
+```sh
+sudo dnf install -y python3-pip python3-devel \
+                    pango pango-devel harfbuzz \
+                    cairo cairo-devel \
+                    gdk-pixbuf2 libffi-devel \
+                    mariadb-connector-c-devel gcc
+```
+
+**Debian / Ubuntu:**
+
+```sh
+sudo apt update
+sudo apt install -y python3-pip python3-venv python3-dev \
+                    libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b \
+                    libcairo2 libgdk-pixbuf-2.0-0 libffi-dev \
+                    libmariadb-dev gcc
+```
+
+The `*-devel` / `*-dev` packages are only needed while installing
+`mariadb` and (sometimes) `weasyprint` from pip — you can remove them
+afterwards if you're tight on disk.
 
 ## Installation
 
