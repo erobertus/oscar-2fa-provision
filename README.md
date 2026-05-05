@@ -128,6 +128,7 @@ Important groups:
 | `DB_*` | OSCAR database connection. Use the `tfa_admin` credentials. |
 | `SSH_*`, `PKEY_FILE`, `CERT_SECRET` | Optional SSH-tunnel mode for remote DBs. |
 | `SMTP_*`, `FROM_ADDR`, `FROM_FRIENDLY` | Outbound email. `SMTP_MODE=ssl\|starttls\|plain`. |
+| `CC_ADDRS` | Optional comma-separated list of addresses to CC on every successfully-sent provisioning email (e.g. clinic managers). Leave blank to skip. |
 | `TOTP_*` | Algorithm/digits/period embedded in the QR. SHA-256, 6, 30 by default. |
 | `OSCAR_LOGIN_URL`, `INITIAL_PASSWORD`, `CLINIC_ADMIN_CONTACT` | Strings printed in the user's document. |
 | `OUTPUT_DIR` | Where PDFs are written (always). |

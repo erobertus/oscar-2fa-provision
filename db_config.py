@@ -74,6 +74,15 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 FROM_ADDR = os.getenv("FROM_ADDR", "")
 FROM_FRIENDLY = os.getenv("FROM_FRIENDLY", "IT Support")
 
+# CC_ADDRS is an optional comma-separated list. We parse once at import
+# time, strip whitespace, drop empties, and ignore obviously-malformed
+# entries (anything without an '@'). Result is a list[str], possibly empty.
+CC_ADDRS = [
+    addr.strip()
+    for addr in os.getenv("CC_ADDRS", "").split(",")
+    if addr.strip() and "@" in addr.strip()
+]
+
 # --- TOTP defaults -----------------------------------------------------------
 TOTP_ISSUER = os.getenv("TOTP_ISSUER", "OSCAR EMR")
 TOTP_ALGORITHM = os.getenv("TOTP_ALGORITHM", "sha256").strip().lower()

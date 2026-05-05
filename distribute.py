@@ -31,12 +31,20 @@ def send_email(
     qr_png: bytes,
     qr_cid: str,
     pdf_attachment: Optional[Path] = None,
+    cc_addrs: Optional[List[str]] = None,
 ) -> None:
-    """Send a multipart/alternative email with an inline QR + optional PDF."""
+    """Send a multipart/alternative email with an inline QR + optional PDF.
+
+    `cc_addrs` is an optional list of addresses to CC. They'll appear in
+    the visible Cc: header (not BCC) and receive the same payload as the
+    primary recipients.
+    """
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = f"{from_friendly} <{from_addr}>" if from_friendly else from_addr
     msg["To"] = ", ".join(to_addrs)
+    if cc_addrs:
+        msg["Cc"] = ", ".join(cc_addrs)
 
     # Plain-text part first (RFC requirement: simplest part first).
     msg.set_content(text_body)

@@ -364,6 +364,7 @@ def main() -> int:
                     from_addr=cfg.FROM_ADDR,
                     from_friendly=cfg.FROM_FRIENDLY,
                     to_addrs=[person.email],
+                    cc_addrs=cfg.CC_ADDRS or None,
                     subject=f"OSCAR EMR access and 2FA setup for {person.full_name}",
                     html_body=email_html,
                     text_body=email_text,
@@ -372,7 +373,13 @@ def main() -> int:
                     pdf_attachment=pdf_path,
                 )
                 email_destination = person.email
-                term.say_ok(f"  Email sent to {person.email}.")
+                if cfg.CC_ADDRS:
+                    term.say_ok(
+                        f"  Email sent to {person.email} "
+                        f"(cc: {', '.join(cfg.CC_ADDRS)})."
+                    )
+                else:
+                    term.say_ok(f"  Email sent to {person.email}.")
             except Exception as e:
                 term.say_err(f"  ERROR: email send failed: {e}")
         elif args.no_email:
