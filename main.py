@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import db_config as cfg
+import term
 from audit import write_event
 from db_connection import connect_to_database
 from distribute import copy_to_nextcloud, send_email
@@ -38,34 +39,32 @@ from totp import build_otpauth_uri, generate_secret
 # ---------------------------------------------------------------------------
 # Pretty-printing helpers
 # ---------------------------------------------------------------------------
-def _hr() -> None:
-    print("─" * 70)
-
-
 def _yn(prompt: str, default: bool = False) -> bool:
-    suffix = " [Y/n] " if default else " [y/N] "
+    suffix = (
+        f" {term.dim('[Y/n]')} " if default else f" {term.dim('[y/N]')} "
+    )
     while True:
-        ans = input(prompt + suffix).strip().lower()
+        ans = input(term.bold(prompt) + suffix).strip().lower()
         if not ans:
             return default
         if ans in ("y", "yes"):
             return True
         if ans in ("n", "no"):
             return False
-        print("  Please answer 'y' or 'n'.")
+        term.say_warn("  Please answer 'y' or 'n'.")
 
 
 def _pick_one(prompt: str, options: List[str]) -> int:
     """Prompt the user to pick one of `options` by number. Returns 0-based index."""
     for i, label in enumerate(options, 1):
-        print(f"  {i}. {label}")
+        print(f"  {term.picker_index(i)} {label}")
     while True:
-        ans = input(prompt + " ").strip()
+        ans = input(term.bold(prompt) + " ").strip()
         if ans.isdigit():
             n = int(ans)
             if 1 <= n <= len(options):
                 return n - 1
-        print(f"  Enter a number between 1 and {len(options)}.")
+        term.say_warn(f"  Enter a number between 1 and {len(options)}.")
 
 
 # ---------------------------------------------------------------------------
@@ -74,53 +73,77 @@ def _pick_one(prompt: str, options: List[str]) -> int:
 def search_and_select(connection) -> Optional[Person]:
     """Run the interactive search loop until the user picks a Person or quits."""
     while True:
-        query = input("Search by last name (blank to quit): ").strip()
+        query = input(
+            term.bold("Search by last name") + term.dim(" (blank to quit): ")
+        ).strip()
         if not query:
             return None
 
         people = search_by_lastname(connection, query)
         if not people:
-            print(f"  No active users found matching '{query}'.")
+            term.say_warn(f"  No active users found matching '{query}'.")
             continue
 
         if len(people) == 1:
             return people[0]
 
-        print(f"\n  {len(people)} matches for '{query}':")
+        print()
+        term.say_ok(f"Found {len(people)} matches for '{query}':")
         labels = []
         for p in people:
             if p.practitioner_no and len(p.accounts) > 1:
                 labels.append(
-                    f"{p.full_name}  —  practitionerNo {p.practitioner_no}  "
-                    f"—  {len(p.accounts)} offices"
+                    f"{term.bold(p.full_name)}  {term.dim('—')}  "
+                    f"practitionerNo {p.practitioner_no}  {term.dim('—')}  "
+                    f"{len(p.accounts)} offices"
                 )
             else:
                 # Standalone or single-office account
-                team = f" ({p.accounts[0].team})" if p.accounts and p.accounts[0].team else ""
+                team = (
+                    f" {term.dim('(' + p.accounts[0].team + ')')}"
+                    if p.accounts and p.accounts[0].team
+                    else ""
+                )
                 user = p.accounts[0].user_name if p.accounts else "?"
-                labels.append(f"{p.full_name}  —  {user}{team}")
+                labels.append(
+                    f"{term.bold(p.full_name)}  {term.dim('—')}  {user}{team}"
+                )
         idx = _pick_one("  Pick one:", labels)
         return people[idx]
 
 
 def show_person(person: Person) -> None:
     """Print a summary of the person and all their accounts."""
-    _hr()
-    print(f"  {person.full_name}")
+    term.hr()
+    print(f"  {term.bold(person.full_name)}")
     if person.practitioner_no:
-        print(f"  practitionerNo: {person.practitioner_no}")
+        print(f"  {term.dim('practitionerNo:')} {person.practitioner_no}")
     else:
-        print(f"  provider_no:    {person.provider_no}")
-    print(f"  email:          {person.email or '(none on file)'}")
-    print(f"  accounts:       {len(person.accounts)}")
-    _hr()
-    print(f"    {'2FA':<5} {'Username':<14}  {'Display name':<18} Office")
-    _hr()
+        print(f"  {term.dim('provider_no:   ')} {person.provider_no}")
+    email_text = person.email if person.email else term.dim("(none on file)")
+    print(f"  {term.dim('email:         ')} {email_text}")
+    print(f"  {term.dim('accounts:      ')} {len(person.accounts)}")
+    term.hr()
+    # Pad to fixed visible widths first, then colorize. Coloring before
+    # padding would inflate the f-string width with invisible escape
+    # characters and misalign columns.
+    h_2fa = f"{'2FA':<5}"
+    h_user = f"{'Username':<14}"
+    h_name = f"{'Display name':<18}"
+    print(
+        f"    {term.bold(h_2fa)} {term.bold(h_user)}  "
+        f"{term.bold(h_name)} {term.bold('Office')}"
+    )
+    term.hr()
     for a in person.accounts:
-        status = "on" if a.is_2fa_enabled else "off"
-        team = f"({a.team})" if a.team else ""
-        print(f"    {status:<5} {a.user_name:<14}  {a.first_name:<18} {team}")
-    _hr()
+        status_padded = f"{'on' if a.is_2fa_enabled else 'off':<5}"
+        if a.is_2fa_enabled:
+            status = term.green(status_padded)
+        else:
+            status = term.dim(status_padded)
+        team = term.dim(f"({a.team})") if a.team else ""
+        print(f"    {status} {a.user_name:<14}  {a.first_name:<18} {team}")
+    term.hr()
 
 
 # ---------------------------------------------------------------------------
@@ -260,58 +283,67 @@ def main() -> int:
 
     connection, tunnel = connect_to_database(use_ssh, db_config)
     if connection is None:
-        print("Could not connect to the database. See messages above.")
+        term.say_err("Could not connect to the database. See messages above.")
         return 2
 
     try:
         # Step 1: search & select
         person = search_and_select(connection)
         if person is None:
-            print("Cancelled.")
+            term.say_dim("Cancelled.")
             return 0
 
         # Step 2: show the picture
         show_person(person)
 
         if not person.has_email():
-            print(
+            term.say_warn(
                 "  WARNING: no email on file for this person. "
-                "The PDF will be saved locally but cannot be emailed.\n"
+                "The PDF will be saved locally but cannot be emailed."
             )
+            print()
 
         # Step 3: confirmation
         if person.any_2fa_enabled():
-            print(
-                "  WARNING: 2FA is already enabled for one or more accounts.\n"
-                "  Provisioning will REPLACE the existing secret. The user's\n"
-                "  current authenticator entry will stop working immediately.\n"
+            term.say_warn(
+                "  WARNING: 2FA is already enabled for one or more accounts."
             )
+            print(
+                f"  Provisioning will {term.red(term.bold('REPLACE'))} "
+                f"the existing secret. The user's"
+            )
+            print(
+                "  current authenticator entry will stop working immediately."
+            )
+            print()
             if not _yn("  Replace the existing secret?", default=False):
-                print("Cancelled.")
+                term.say_dim("Cancelled.")
                 return 0
         else:
             if not _yn("  Provision 2FA for this user?", default=True):
-                print("Cancelled.")
+                term.say_dim("Cancelled.")
                 return 0
 
         # Step 4: generate secret + build documents
+        term.header("Provisioning")
+
         secret = generate_secret()
         output_dir = Path(cfg.OUTPUT_DIR).expanduser()
 
         pdf_path, email_html, qr_png, email_text, qr_cid = build_documents(
             person, secret, output_dir
         )
-        print(f"\n  PDF written: {pdf_path}")
+        print(f"  {term.dim('PDF written:')}    {pdf_path}")
 
         # Step 5: write to DB (unless dry-run)
         if args.dry_run:
-            print("  DRY-RUN: skipping DB update and email.")
+            term.say_warn("  DRY-RUN: skipping DB update and email.")
             updated = 0
         else:
             updated = update_2fa_for_person(
                 connection, person, secret, cfg.TOTP_ALGORITHM
             )
-            print(f"  Updated {updated} security row(s).")
+            term.say_ok(f"  Updated {updated} security row(s).")
 
         # Step 6a: email
         email_destination = ""
@@ -340,13 +372,13 @@ def main() -> int:
                     pdf_attachment=pdf_path,
                 )
                 email_destination = person.email
-                print(f"  Email sent to {person.email}.")
+                term.say_ok(f"  Email sent to {person.email}.")
             except Exception as e:
-                print(f"  ERROR: email send failed: {e}")
+                term.say_err(f"  ERROR: email send failed: {e}")
         elif args.no_email:
-            print("  --no-email: skipping email send.")
+            term.say_dim("  --no-email: skipping email send.")
         elif not cfg.SMTP_HOST or not cfg.FROM_ADDR:
-            print("  Skipping email — SMTP_HOST or FROM_ADDR not configured.")
+            term.say_dim("  Skipping email — SMTP_HOST or FROM_ADDR not configured.")
 
         # Step 6b: Nextcloud
         nextcloud_path: Optional[Path] = None
@@ -354,9 +386,9 @@ def main() -> int:
             try:
                 nextcloud_path = copy_to_nextcloud(pdf_path, cfg.NEXTCLOUD_DIR)
                 if nextcloud_path:
-                    print(f"  Nextcloud copy: {nextcloud_path}")
+                    term.say_ok(f"  Nextcloud copy: {nextcloud_path}")
             except Exception as e:
-                print(f"  ERROR: Nextcloud copy failed: {e}")
+                term.say_err(f"  ERROR: Nextcloud copy failed: {e}")
 
         # Step 7: audit log
         write_event(
@@ -370,7 +402,8 @@ def main() -> int:
             dry_run=args.dry_run,
         )
 
-        print("\nDone.")
+        print()
+        term.say_ok("Done.")
         return 0
 
     finally:
