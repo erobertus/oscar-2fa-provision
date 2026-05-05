@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OSCAR EMR — Two-Factor Authentication Setup</title>
+<style>
+  /* The same stylesheet drives both the inline HTML email and the PDF
+     produced by WeasyPrint. WeasyPrint supports @page; mail clients
+     ignore it. Keep selectors simple and avoid web fonts. */
+  @page {
+    size: Letter;
+    margin: 0.4in 0.55in 0.4in 0.55in;
+  }
+  body {
+    font-family: "Helvetica", "Arial", sans-serif;
+    color: #222;
+    font-size: 10.5pt;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .title-bar {
+    background: #2c5d3f;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 4px;
+  }
+  .title-bar h1 {
+    font-size: 14pt;
+    margin: 0 0 2px 0;
+    font-weight: 600;
+  }
+  .title-bar .subtitle {
+    font-size: 10pt;
+    opacity: 0.9;
+  }
+  h2 {
+    font-size: 11pt;
+    margin: 11px 0 3px 0;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #ccc;
+    color: #2c5d3f;
+    page-break-after: avoid;
+  }
+  .row {
+    display: table;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .row .col-text {
+    display: table-cell;
+    vertical-align: top;
+    padding-right: 16px;
+  }
+  .row .col-qr {
+    display: table-cell;
+    vertical-align: top;
+    text-align: center;
+    width: 180px;
+  }
+  .qr-box {
+    border: 1px solid #ccc;
+    padding: 6px;
+    background: #fff;
+    display: inline-block;
+  }
+  .qr-box img {
+    display: block;
+    width: 160px;
+    height: 160px;
+  }
+  .field-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 4px 0;
+  }
+  .field-table td {
+    padding: 3px 0;
+    vertical-align: top;
+  }
+  .field-table td.label {
+    font-weight: 600;
+    width: 120px;
+    color: #555;
+  }
+  code, .mono {
+    font-family: "Menlo", "Consolas", "Courier New", monospace;
+    background: #f5f5f5;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 10.5pt;
+    word-break: break-all;
+  }
+  .secret-block {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    padding: 8px 10px;
+    border-radius: 3px;
+    font-family: "Menlo", "Consolas", "Courier New", monospace;
+    font-size: 10pt;
+    word-break: break-all;
+    margin: 6px 0;
+  }
+  ol, ul { margin: 4px 0 4px 22px; padding: 0; }
+  ol li, ul li { margin: 2px 0; }
+  .note {
+    background: #fff8e1;
+    border-left: 3px solid #f0b400;
+    padding: 6px 10px;
+    margin: 8px 0;
+    font-size: 10pt;
+  }
+  .footer {
+    margin-top: 10px;
+    padding-top: 6px;
+    border-top: 1px solid #ccc;
+    color: #777;
+    font-size: 9pt;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="title-bar">
+    <h1>OSCAR EMR — Two-Factor Authentication Setup</h1>
+    <div class="subtitle">For: {{ full_name }}</div>
+  </div>
+
+  <h2>Your sign-in details</h2>
+  <table class="field-table">
+    <tr>
+      <td class="label">Sign-in URL</td>
+      <td><a href="{{ login_url }}">{{ login_url }}</a></td>
+    </tr>
+    <tr>
+      <td class="label">Username{{ 's' if usernames|length > 1 else '' }}</td>
+      <td>
+        {% for u in usernames %}<code>{{ u.user_name }}</code>{% if u.team %} &nbsp;<span style="color:#777">({{ u.team }})</span>{% endif %}{% if not loop.last %}<br>{% endif %}{% endfor %}
+      </td>
+    </tr>
+    <tr>
+      <td class="label">Password</td>
+      <td>
+        <code>{{ initial_password }}</code>
+        <span style="color:#777"> — or your current password if you've already changed it.</span>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin: 4px 0; color: #555;">
+    Use a desktop or laptop browser to sign in. The OSCAR interface is not
+    designed for phones.
+  </p>
+
+  <h2>Set up your authenticator app</h2>
+  <div class="row">
+    <div class="col-text">
+      <ol>
+        <li>Install <strong>Google Authenticator</strong>, <strong>1Password</strong>,
+            <strong>Microsoft Authenticator</strong>, or any TOTP app on your phone.</li>
+        <li>Open the app and tap <strong>+</strong> to add a new account.</li>
+        <li>Choose <strong>Scan a QR code</strong> and point your camera at the
+            code on the right.</li>
+        <li>The app will create an entry called
+            <code>{{ totp_issuer }}: {{ full_name }}</code> and start showing
+            a 6-digit code that changes every 30 seconds.</li>
+      </ol>
+      <div class="note">
+        Don't take a photo of the QR code — open the authenticator app first
+        and use its <em>scan</em> feature.
+      </div>
+    </div>
+    <div class="col-qr">
+      <div class="qr-box">
+        <img src="{{ qr_src }}" alt="QR code" width="160" height="160">
+      </div>
+    </div>
+  </div>
+
+  <h2>Manual setup (if you can't scan the QR code)</h2>
+  <p style="margin: 4px 0;">
+    In your authenticator app, choose <strong>Enter a setup key</strong> and use:
+  </p>
+  <div class="secret-block">{{ secret_display }}</div>
+  <table class="field-table">
+    <tr><td class="label">Account name</td><td><code>{{ totp_issuer }}: {{ full_name }}</code></td></tr>
+    <tr><td class="label">Type</td><td>Time-based</td></tr>
+    <tr><td class="label">Algorithm</td><td>SHA-256</td></tr>
+    <tr><td class="label">Digits</td><td>{{ totp_digits }}</td></tr>
+    <tr><td class="label">Period</td><td>{{ totp_period }} seconds</td></tr>
+  </table>
+
+  <h2>Logging in</h2>
+  <p style="margin: 4px 0;">At the OSCAR sign-in screen:</p>
+  <ol>
+    <li>Enter your <strong>Username</strong> and <strong>Password</strong>.</li>
+    <li>For <strong>2nd Level Passcode</strong>, open your authenticator app and
+        type the current 6-digit code shown for {{ totp_issuer }}.
+        If a code is rejected, wait for the next one and try again.</li>
+    <li>Click <strong>Sign in</strong>.</li>
+  </ol>
+
+  <h2>Need help?</h2>
+  <p style="margin: 4px 0;">
+    Contact {{ clinic_admin_contact }}.
+    <strong style="color:#c62828;">Never share the QR code or setup key with anyone</strong> —
+    anyone with this code can sign in as you.
+  </p>
+
+  <div class="footer">
+    This is an automated message — please do not reply. The mailbox it was
+    sent from is not monitored.
+  </div>
+
+</div>
+</body>
+</html>

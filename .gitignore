@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Environment / secrets — NEVER commit
+.env
+ssh/*
+!ssh/.gitkeep
+
+# Generated artefacts
+output/
+logs/
+*.pdf
+*.png
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
