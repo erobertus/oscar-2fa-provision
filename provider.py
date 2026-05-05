@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 from sql_const import (
+    PROVIDER_NO_MAX,
+    PROVIDER_NO_MIN,
     SQL_FETCH_BY_PRACTITIONER,
     SQL_FETCH_BY_PROVIDER,
     SQL_SEARCH_BY_LASTNAME,
@@ -117,7 +119,10 @@ def search_by_lastname(connection, last_name_query: str) -> List[Person]:
     we could update for them.
     """
     cur = connection.cursor(buffered=True)
-    cur.execute(SQL_SEARCH_BY_LASTNAME, (f"%{last_name_query}%",))
+    cur.execute(
+        SQL_SEARCH_BY_LASTNAME,
+        (f"%{last_name_query}%", PROVIDER_NO_MIN, PROVIDER_NO_MAX),
+    )
     raw_rows = list(cur)
     cur.close()
 
@@ -170,7 +175,10 @@ def _fetch_person_by_practitioner(
 ) -> Optional[Person]:
     """Hydrate a Person from the DB by practitionerNo (1..N accounts)."""
     cur = connection.cursor(buffered=True)
-    cur.execute(SQL_FETCH_BY_PRACTITIONER, (practitioner_no,))
+    cur.execute(
+        SQL_FETCH_BY_PRACTITIONER,
+        (practitioner_no, PROVIDER_NO_MIN, PROVIDER_NO_MAX),
+    )
     rows = list(cur)
     cur.close()
     return _build_person_from_rows(rows)
@@ -179,7 +187,10 @@ def _fetch_person_by_practitioner(
 def _fetch_person_by_provider(connection, provider_no: str) -> Optional[Person]:
     """Hydrate a single-account Person from the DB by provider_no."""
     cur = connection.cursor(buffered=True)
-    cur.execute(SQL_FETCH_BY_PROVIDER, (provider_no,))
+    cur.execute(
+        SQL_FETCH_BY_PROVIDER,
+        (provider_no, PROVIDER_NO_MIN, PROVIDER_NO_MAX),
+    )
     rows = list(cur)
     cur.close()
     return _build_person_from_rows(rows)
