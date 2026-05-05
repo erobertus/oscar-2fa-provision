@@ -15,8 +15,12 @@ sign-in steps.
 ## What it does
 
 1. Searches OSCAR providers by last name (case-insensitive substring).
-2. Groups results by `practitionerNo` so that a single physical person
-   with multiple team accounts shows up as one entry.
+2. Groups results so each match represents a physical person:
+   - Provider rows that share a non-empty `practitionerNo` collapse
+     to one entry (multi-office doctors).
+   - Anyone else — PAs, NPs, single-office providers, or rows with a
+     blank `practitionerNo` — appears as a standalone entry, one per
+     provider row.
 3. Shows the matched person's accounts with their current 2FA status
    and prompts for confirmation.
 4. Generates a fresh base32 secret (256 bits of entropy).
@@ -143,9 +147,13 @@ from your Nextcloud copy and resend it manually.
 columns:
 
 ```
-timestamp  actor  practitioner_no  full_name  accounts_updated
+timestamp  actor  person_id  full_name  accounts_updated
 email_sent_to  nextcloud_copy  dry_run  notes
 ```
+
+`person_id` is the `practitionerNo` for grouped multi-office doctors,
+or `p:<provider_no>` for standalone accounts — the prefix keeps the
+two namespaces visually distinct.
 
 The secret itself is **never** written to the log.
 

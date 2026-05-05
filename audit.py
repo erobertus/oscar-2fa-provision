@@ -16,7 +16,7 @@ from typing import Iterable
 _AUDIT_HEADERS = (
     "timestamp",
     "actor",
-    "practitioner_no",
+    "person_id",
     "full_name",
     "accounts_updated",
     "email_sent_to",
@@ -30,7 +30,7 @@ def write_event(
     log_dir: str,
     *,
     actor: str,
-    practitioner_no: str,
+    person_id: str,
     full_name: str,
     accounts_updated: int,
     email_sent_to: str,
@@ -38,7 +38,13 @@ def write_event(
     dry_run: bool,
     notes: str = "",
 ) -> Path:
-    """Append a single audit row. Creates the log file with header if absent."""
+    """Append a single audit row. Creates the log file with header if absent.
+
+    `person_id` is the practitionerNo for grouped multi-office doctors,
+    or `p:<provider_no>` for standalone accounts (PAs, NPs, single-office
+    providers, anyone with no practitionerNo). The two are visually
+    distinguishable so log readers don't conflate the namespaces.
+    """
     log_path = Path(log_dir) / "provision.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     new_file = not log_path.exists()
@@ -46,7 +52,7 @@ def write_event(
     fields: Iterable[str] = (
         datetime.now().isoformat(timespec="seconds"),
         actor,
-        practitioner_no,
+        person_id,
         full_name,
         str(accounts_updated),
         email_sent_to or "-",

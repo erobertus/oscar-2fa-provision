@@ -6,21 +6,22 @@ grants needed for these specific statements.
 """
 
 # Search providers by last name (case-insensitive substring match).
-# Returns one row per provider account belonging to anyone whose last name
-# matches. We later group by practitionerNo to collapse to a "person".
+# Returns one row per provider account for any active provider whose last
+# name matches. We later decide whether to group by practitionerNo
+# (multi-office doctors) or treat each provider row as a standalone person
+# (PAs, NPs, single-office doctors, anyone with a blank practitionerNo).
 SQL_SEARCH_BY_LASTNAME = """\
 SELECT p.provider_no,
        p.last_name,
        p.first_name,
        p.email,
        p.team,
-       p.practitionerNo,
+       COALESCE(p.practitionerNo, '') AS practitionerNo,
        p.status
   FROM provider p
  WHERE LOWER(p.last_name) LIKE LOWER(?)
    AND p.status = '1'
-   AND COALESCE(p.practitionerNo, '') <> ''
- ORDER BY p.practitionerNo, p.first_name
+ ORDER BY COALESCE(p.practitionerNo, ''), p.first_name, p.provider_no
 """
 
 # Given a practitionerNo, fetch all provider rows for that physical person
@@ -33,7 +34,7 @@ SELECT p.provider_no,
        p.first_name,
        p.email,
        p.team,
-       p.practitionerNo,
+       COALESCE(p.practitionerNo, '') AS practitionerNo,
        s.security_no,
        s.user_name,
        s._EYR_2FAenabled,
@@ -44,6 +45,26 @@ SELECT p.provider_no,
  WHERE p.practitionerNo = ?
    AND p.status = '1'
  ORDER BY p.team, p.provider_no
+"""
+
+# Fetch a single provider row + its security row by provider_no. Used
+# for standalone accounts (PAs, NPs, anyone without a shared practitionerNo).
+SQL_FETCH_BY_PROVIDER = """\
+SELECT p.provider_no,
+       p.last_name,
+       p.first_name,
+       p.email,
+       p.team,
+       COALESCE(p.practitionerNo, '') AS practitionerNo,
+       s.security_no,
+       s.user_name,
+       s._EYR_2FAenabled,
+       s._EYR_2FASecret,
+       s._EYR_2FAtotp
+  FROM provider p
+  LEFT JOIN security s ON s.provider_no = p.provider_no
+ WHERE p.provider_no = ?
+   AND p.status = '1'
 """
 
 # Update the four 2FA columns on a single security row.

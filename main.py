@@ -86,12 +86,19 @@ def search_and_select(connection) -> Optional[Person]:
         if len(people) == 1:
             return people[0]
 
-        print(f"\n  {len(people)} people match '{query}':")
-        labels = [
-            f"{p.full_name}  —  practitionerNo {p.practitioner_no}  "
-            f"—  {len(p.accounts)} account{'s' if len(p.accounts) != 1 else ''}"
-            for p in people
-        ]
+        print(f"\n  {len(people)} matches for '{query}':")
+        labels = []
+        for p in people:
+            if p.practitioner_no and len(p.accounts) > 1:
+                labels.append(
+                    f"{p.full_name}  —  practitionerNo {p.practitioner_no}  "
+                    f"—  {len(p.accounts)} offices"
+                )
+            else:
+                # Standalone or single-office account
+                team = f" ({p.accounts[0].team})" if p.accounts and p.accounts[0].team else ""
+                user = p.accounts[0].user_name if p.accounts else "?"
+                labels.append(f"{p.full_name}  —  {user}{team}")
         idx = _pick_one("  Pick one:", labels)
         return people[idx]
 
@@ -100,7 +107,10 @@ def show_person(person: Person) -> None:
     """Print a summary of the person and all their accounts."""
     _hr()
     print(f"  {person.full_name}")
-    print(f"  practitionerNo: {person.practitioner_no}")
+    if person.practitioner_no:
+        print(f"  practitionerNo: {person.practitioner_no}")
+    else:
+        print(f"  provider_no:    {person.provider_no}")
     print(f"  email:          {person.email or '(none on file)'}")
     print(f"  accounts:       {len(person.accounts)}")
     _hr()
@@ -350,7 +360,7 @@ def main() -> int:
         write_event(
             cfg.LOG_DIR,
             actor=os.getenv("SUDO_USER") or getpass.getuser(),
-            practitioner_no=person.practitioner_no,
+            person_id=person.person_id,
             full_name=person.full_name,
             accounts_updated=updated,
             email_sent_to=email_destination,
