@@ -114,10 +114,11 @@ def show_person(person: Person) -> None:
     print(f"  email:          {person.email or '(none on file)'}")
     print(f"  accounts:       {len(person.accounts)}")
     _hr()
+    print(f"    {'2FA':<5} {'Username':<14}  {'Display name':<18} Office")
     for a in person.accounts:
-        status = "ENABLED " if a.is_2fa_enabled else "disabled"
+        status = "on" if a.is_2fa_enabled else "off"
         team = f"({a.team})" if a.team else ""
-        print(f"    [{status}] {a.user_name:14s}  {a.first_name:18s} {team}")
+        print(f"    {status:<5} {a.user_name:<14}  {a.first_name:<18} {team}")
     _hr()
 
 
