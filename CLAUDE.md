@@ -74,6 +74,14 @@ base64 data URI for the PDF. Both derive from a single
 have been tuned carefully; don't add sections without checking the
 overflow.
 
+The PDF is rendered **in memory** (`render_pdf_bytes`) and contains the
+TOTP secret, so persisting it anywhere is opt-in: `OUTPUT_DIR` (blank
+by default) and `NEXTCLOUD_DIR` are both optional destinations, and the
+email attaches the bytes directly. `main()` refuses to provision when
+no delivery channel exists at all (no email possible, both dirs blank)
+— a written secret nobody can see would lock the user out. Don't
+reintroduce an unconditional disk write.
+
 ### Re-issuance
 If `_EYR_2FAenabled=1` already for any of a Person's accounts, the
 script prints a **yellow warning + bold red REPLACE** in the confirm
@@ -162,7 +170,9 @@ location so nothing moves:
 - `/etc/oscar-2fa-provision/oscar-2fa-provision.conf` — config, root:root `600`
 - `/etc/oscar-2fa-provision/ssh/` — tunnel keys, `700`
 - `/var/log/oscar-2fa-provision/` — audit log
-- `/var/lib/oscar-2fa-provision/output/` — generated PDFs
+- `/var/lib/oscar-2fa-provision/output/` — generated PDFs, IF the admin
+  opts in by setting `OUTPUT_DIR` (blank by default — the PDF carries
+  the secret)
 
 The wrapper resolves config in this order: `$CONFIG_DIR/$ENV_FILENAME`
 override → the `/etc` conf if present → `.env` next to the script (dev

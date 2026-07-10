@@ -27,10 +27,14 @@ sign-in steps.
 5. In a single transaction, sets `_EYR_2FAenabled = 1`,
    `_EYR_2FASecret = <new>`, and `_EYR_2FAtotp = 'sha256'` on every
    `security` row belonging to that person.
-6. Renders a one-page instruction document — same content goes to:
+6. Renders a one-page instruction document **in memory** — same content
+   goes to:
    - the user's email (HTML body with inline QR + PDF attachment)
-   - a local output directory
+   - an optional local output directory (`OUTPUT_DIR`, off by default —
+     the PDF contains the secret, so keeping a copy is opt-in)
    - an optional Nextcloud directory mounted on the host
+   At least one channel must be available or the script refuses to
+   provision (a secret nobody can see would lock the user out).
 7. Appends an audit-log row recording who provisioned whom and where
    the document went.
 
@@ -166,8 +170,8 @@ full annotated list. Important groups:
 | `CC_ADDRS` | Optional comma-separated list of addresses to CC on every successfully-sent provisioning email (e.g. clinic managers). Leave blank to skip. |
 | `TOTP_*` | Algorithm/digits/period embedded in the QR. SHA-256, 6, 30 by default. |
 | `OSCAR_LOGIN_URL`, `INITIAL_PASSWORD`, `CLINIC_ADMIN_CONTACT` | Strings printed in the user's document. |
-| `OUTPUT_DIR` | Where PDFs are written (always). |
-| `NEXTCLOUD_DIR` | Optional. If set and the directory exists, the PDF is also copied there. |
+| `OUTPUT_DIR` | Optional. If set, a copy of each PDF is kept there. Blank (default) = no local copy — the PDF contains the secret. |
+| `NEXTCLOUD_DIR` | Optional. If set and the directory exists, the PDF is also written there (the recovery-copy channel). |
 | `LOG_DIR` | Where the audit log is appended. |
 
 ## Usage
@@ -197,7 +201,7 @@ Search by last name (blank to quit): mosaad
 ──────────────────────────────────────────────────────────────────────
   Provision 2FA for this user? [Y/n] y
 
-  PDF written: ./output/Mosaad_Sonia_78222.pdf
+  OUTPUT_DIR not set — no local PDF copy kept.
   Updated 6 security row(s).
   Email sent to Soniamosaad@gmail.com.
 

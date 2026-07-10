@@ -106,8 +106,11 @@ CLINIC_ADMIN_CONTACT = os.getenv(
 )
 
 # --- Output destinations -----------------------------------------------------
-OUTPUT_DIR = os.getenv("OUTPUT_DIR", "") or str(_APP_DIR / "output")
-NEXTCLOUD_DIR = os.getenv("NEXTCLOUD_DIR", "")  # optional
+# OUTPUT_DIR and NEXTCLOUD_DIR are both optional destinations for the
+# secret-bearing PDF; blank means "don't persist a copy there". The audit
+# log always has a home — it contains no secrets.
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", "")
+NEXTCLOUD_DIR = os.getenv("NEXTCLOUD_DIR", "")
 LOG_DIR = os.getenv("LOG_DIR", "") or str(_APP_DIR / "logs")
 
 # --- Misc --------------------------------------------------------------------

@@ -99,8 +99,9 @@ chmod 750 "$CONF_DIR"
 chmod 700 "$CONF_DIR/ssh"
 
 # Installed sample gets FHS paths instead of the checkout-relative defaults.
-sed -e "s|^OUTPUT_DIR=.*|OUTPUT_DIR=$DATA_DIR/output|" \
-    -e "s|^LOG_DIR=.*|LOG_DIR=$LOG_DIR|" \
+# OUTPUT_DIR is deliberately NOT filled in: local PDF copies are opt-in
+# (the PDF carries the TOTP secret); $DATA_DIR/output exists if wanted.
+sed -e "s|^LOG_DIR=.*|LOG_DIR=$LOG_DIR|" \
     -e "s|^PKEY_FILE=.*|PKEY_FILE=$CONF_DIR/ssh/oscar_db.key|" \
     "$SRC_DIR/.env.sample" > "$CONF_SAMPLE"
 chmod 640 "$CONF_SAMPLE"

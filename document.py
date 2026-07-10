@@ -58,17 +58,20 @@ def render_html(ctx: DocumentContext, qr_src: str) -> str:
     )
 
 
-def render_pdf(html: str, output_path: Path) -> Path:
-    """Render `html` to a PDF at `output_path` using WeasyPrint."""
+def render_pdf_bytes(html: str) -> bytes:
+    """Render `html` to PDF in memory using WeasyPrint.
+
+    Returning bytes (rather than writing a file) lets the caller decide
+    which destinations — if any — receive a persisted copy. The document
+    contains the TOTP secret, so nothing is written to disk here.
+    """
     # Imported lazily so the rest of the module can be imported on systems
     # where WeasyPrint isn't (yet) installed — it has chunky native deps.
     from weasyprint import HTML
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    HTML(string=html, base_url=str(Path(__file__).resolve().parent)).write_pdf(
-        target=str(output_path)
-    )
-    return output_path
+    return HTML(
+        string=html, base_url=str(Path(__file__).resolve().parent)
+    ).write_pdf(target=None)
 
 
 def render_plain_text(html: str) -> str:

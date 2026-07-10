@@ -28,8 +28,8 @@ import db_config as cfg
 import term
 from audit import write_event
 from db_connection import connect_to_database
-from distribute import copy_to_nextcloud, send_email
-from document import DocumentContext, render_html, render_pdf, render_plain_text
+from distribute import save_pdf, send_email
+from document import DocumentContext, render_html, render_pdf_bytes, render_plain_text
 from provider import Person, search_by_lastname
 from qr import render_qr_png_bytes
 from sql_const import BEGIN_TRAN, COMMIT_TRAN, ROLLBACK_TRAN, SQL_UPDATE_2FA
@@ -179,10 +179,13 @@ def update_2fa_for_person(
 # ---------------------------------------------------------------------------
 # Document build + distribute
 # ---------------------------------------------------------------------------
-def build_documents(person: Person, secret: str, output_dir: Path):
+def build_documents(person: Person, secret: str):
     """Render the PDF and HTML/text email bodies for a person.
 
-    Returns: (pdf_path, email_html, qr_png_bytes, email_text, qr_cid)
+    The PDF is rendered in memory only — main() decides which destinations
+    (OUTPUT_DIR, NEXTCLOUD_DIR, email attachment) receive a copy.
+
+    Returns: (pdf_bytes, pdf_filename, email_html, qr_png_bytes, email_text, qr_cid)
     """
     # Build the otpauth URI; account label is "Lastname, Firstname".
     account_label = person.full_name
@@ -225,15 +228,15 @@ def build_documents(person: Person, secret: str, output_dir: Path):
     # PDF: QR is embedded as a data URI so WeasyPrint doesn't need access
     # to any external file.
     pdf_html = render_html(ctx, qr_src=qr_data_uri)
-    pdf_path = output_dir / f"{person.safe_filename_stem}.pdf"
-    render_pdf(pdf_html, pdf_path)
+    pdf_bytes = render_pdf_bytes(pdf_html)
+    pdf_filename = f"{person.safe_filename_stem}.pdf"
 
     # Email: QR is referenced by cid: and attached as a related part.
     qr_cid = f"qr-{uuid.uuid4().hex}"
     email_html = render_html(ctx, qr_src=f"cid:{qr_cid}")
     email_text = render_plain_text(email_html)
 
-    return pdf_path, email_html, qr_png, email_text, qr_cid
+    return pdf_bytes, pdf_filename, email_html, qr_png, email_text, qr_cid
 
 
 # ---------------------------------------------------------------------------
@@ -296,12 +299,37 @@ def main() -> int:
         # Step 2: show the picture
         show_person(person)
 
+        # Which delivery channels can carry the instruction document?
+        can_email = (
+            person.has_email()
+            and not args.no_email
+            and bool(cfg.SMTP_HOST)
+            and bool(cfg.FROM_ADDR)
+        )
+        channels = []
+        if can_email:
+            channels.append(f"email to {person.email}")
+        if cfg.OUTPUT_DIR:
+            channels.append(f"local copy in {cfg.OUTPUT_DIR}")
+        if cfg.NEXTCLOUD_DIR:
+            channels.append(f"copy in {cfg.NEXTCLOUD_DIR}")
+
         if not person.has_email():
             term.say_warn(
-                "  WARNING: no email on file for this person. "
-                "The PDF will be saved locally but cannot be emailed."
+                "  WARNING: no email on file for this person — "
+                "the document cannot be emailed."
             )
             print()
+
+        # Refuse to write a secret nobody will ever see: with no channel
+        # at all, provisioning would lock the user out of their account.
+        if not channels and not args.dry_run:
+            term.say_err(
+                "  No delivery channel for the instruction document: email is "
+                "unavailable and neither OUTPUT_DIR nor NEXTCLOUD_DIR is set."
+            )
+            term.say_err("  Refusing to provision. Configure at least one channel.")
+            return 1
 
         # Step 3: confirmation
         if person.any_2fa_enabled():
@@ -328,12 +356,20 @@ def main() -> int:
         term.header("Provisioning")
 
         secret = generate_secret()
-        output_dir = Path(cfg.OUTPUT_DIR).expanduser()
 
-        pdf_path, email_html, qr_png, email_text, qr_cid = build_documents(
-            person, secret, output_dir
+        pdf_bytes, pdf_filename, email_html, qr_png, email_text, qr_cid = (
+            build_documents(person, secret)
         )
-        print(f"  {term.dim('PDF written:')}    {pdf_path}")
+
+        # Local copy is opt-in: the PDF contains the secret, so nothing is
+        # written to disk unless OUTPUT_DIR is explicitly configured.
+        if cfg.OUTPUT_DIR:
+            pdf_path = save_pdf(
+                pdf_bytes, cfg.OUTPUT_DIR, pdf_filename, create_dir=True
+            )
+            print(f"  {term.dim('PDF written:')}    {pdf_path}")
+        else:
+            term.say_dim("  OUTPUT_DIR not set — no local PDF copy kept.")
 
         # Step 5: write to DB (unless dry-run)
         if args.dry_run:
@@ -347,13 +383,7 @@ def main() -> int:
 
         # Step 6a: email
         email_destination = ""
-        if (
-            not args.dry_run
-            and not args.no_email
-            and person.has_email()
-            and cfg.SMTP_HOST
-            and cfg.FROM_ADDR
-        ):
+        if not args.dry_run and can_email:
             try:
                 send_email(
                     smtp_host=cfg.SMTP_HOST,
@@ -370,7 +400,8 @@ def main() -> int:
                     text_body=email_text,
                     qr_png=qr_png,
                     qr_cid=qr_cid,
-                    pdf_attachment=pdf_path,
+                    pdf_bytes=pdf_bytes,
+                    pdf_filename=pdf_filename,
                 )
                 email_destination = person.email
                 if cfg.CC_ADDRS:
@@ -391,7 +422,9 @@ def main() -> int:
         nextcloud_path: Optional[Path] = None
         if not args.dry_run and cfg.NEXTCLOUD_DIR:
             try:
-                nextcloud_path = copy_to_nextcloud(pdf_path, cfg.NEXTCLOUD_DIR)
+                nextcloud_path = save_pdf(
+                    pdf_bytes, cfg.NEXTCLOUD_DIR, pdf_filename
+                )
                 if nextcloud_path:
                     term.say_ok(f"  Nextcloud copy: {nextcloud_path}")
             except Exception as e:
