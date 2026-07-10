@@ -115,7 +115,10 @@ absolutize_var() {
     _val=$(sed -n "s|^${_var}=||p" "$CONF_FILE" | head -1 \
            | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//; s/^"//; s/"$//')
     case "$_val" in
-        ""|/*) ;;  # empty or already absolute — leave as-is
+        # Leave alone: empty, already absolute, or ~-prefixed (the shell
+        # tilde-expands unquoted values when sourcing the conf, so these
+        # were never relative to the checkout).
+        ""|/*|"~"*) ;;
         *)
             _abs=$(readlink -f "$SRC_DIR/$_val" 2>/dev/null || echo "$SRC_DIR/$_val")
             sed -i "s|^${_var}=.*|${_var}=$_abs|" "$CONF_FILE"
