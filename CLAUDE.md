@@ -214,7 +214,9 @@ new runtime file, add it to the copy list in `install.sh` too.
 
 ## Delivery preference
 
-Deliver code changes as a zip file (via `present_files`). The user
-extracts on their local Windows machine, reviews, and pushes to GitHub
-themselves. Do not paste 200-line files inline unless asked; a single
-zip with all changes is preferred.
+Deliver code changes as **git commits on the session branch** — never
+as zip files (the old zip workflow was a claude.ai-Projects-era
+artifact; the whole point of moving to Code sessions is git
+versioning). Commit with clear messages, summarize the commits in the
+reply, and let the user merge and push to GitHub (`erobertus`)
+himself. Do not paste long files inline unless asked.
