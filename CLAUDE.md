@@ -126,7 +126,8 @@ oscar-2fa-provision/
 ├── requirements.txt                # WeasyPrint pinned to 52.5
 ├── .env.sample                     # annotated config template
 ├── .gitignore                      # blocks .env, ssh/*, output/, logs/
-├── oscar-2fa-provision.sh          # wrapper: env loader + python3 main.py
+├── install.sh                      # root installer: /opt + /etc + /var layout
+├── oscar-2fa-provision.sh          # wrapper: config resolution + venv-aware exec
 ├── main.py                         # interactive orchestrator
 ├── db_config.py                    # os.getenv → module constants
 ├── db_connection.py                # direct + SSH tunnel connect, adapted from auto-billing
@@ -145,6 +146,29 @@ oscar-2fa-provision/
 ├── output/                         # generated PDFs go here (gitignored)
 └── logs/                           # audit log goes here (gitignored)
 ```
+
+## Installed layout (production)
+
+`install.sh` (run as root) deploys FHS-style; re-running upgrades in
+place and **never overwrites an existing config** (it drops a fresh
+`.conf.sample` beside it instead):
+
+- `/opt/oscar-2fa-provision/` — code, templates, private `.venv`
+- `/usr/local/bin/oscar-2fa-provision` — launcher symlink
+- `/etc/oscar-2fa-provision/oscar-2fa-provision.conf` — config, root:root `600`
+- `/etc/oscar-2fa-provision/ssh/` — tunnel keys, `700`
+- `/var/log/oscar-2fa-provision/` — audit log
+- `/var/lib/oscar-2fa-provision/output/` — generated PDFs
+
+The wrapper resolves config in this order: `$CONFIG_DIR/$ENV_FILENAME`
+override → the `/etc` conf if present → `.env` next to the script (dev
+mode). It prefers `<script dir>/.venv/bin/python3` over system
+`python3`. The `/etc` conf is sourced shell-style like `.env`, so the
+same quoting rules apply. When adding a config variable, update
+`.env.sample` — the installer generates the installed sample from it
+(rewriting `OUTPUT_DIR`, `LOG_DIR`, `PKEY_FILE` to absolute paths via
+`sed`, so keep those three as simple `KEY=value` lines). When adding a
+new runtime file, add it to the copy list in `install.sh` too.
 
 ## Conventions to preserve
 

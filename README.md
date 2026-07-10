@@ -97,31 +97,58 @@ this project uses, so the pin is the cleanest fix. If you ever need a
 newer WeasyPrint feature (e.g. for a different project on the same
 host), upgrade Pango first or run that project on a newer host.
 
-## Installation
+## Installation (system-wide)
+
+Install the system packages above first, then:
 
 ```sh
 git clone https://github.com/<you>/oscar-2fa-provision.git
 cd oscar-2fa-provision
-
-# Create a venv and install Python deps
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+sudo ./install.sh
 
 # Create the dedicated DB user (edit the password first!)
 sudo mysql < sql/01_create_tfa_admin.sql
 
-# Configure
-cp .env.sample .env
-chmod 600 .env
-$EDITOR .env       # fill in DB / SMTP / paths
+# Fill in DB / SMTP / paths
+sudo $EDITOR /etc/oscar-2fa-provision/oscar-2fa-provision.conf
+```
+
+`install.sh` lays the tool out FHS-style:
+
+| Path | Purpose |
+| --- | --- |
+| `/opt/oscar-2fa-provision/` | code, templates, and a private venv with the Python deps |
+| `/usr/local/bin/oscar-2fa-provision` | launcher (symlink) |
+| `/etc/oscar-2fa-provision/oscar-2fa-provision.conf` | configuration (`root:root`, mode `600`) |
+| `/etc/oscar-2fa-provision/ssh/` | SSH tunnel key(s), mode `700` |
+| `/var/log/oscar-2fa-provision/` | audit log |
+| `/var/lib/oscar-2fa-provision/output/` | generated PDFs |
+
+- **Upgrade**: `git pull && sudo ./install.sh` — code and venv are
+  refreshed; your existing config is never overwritten (a fresh
+  `.conf.sample` is written beside it for diffing).
+- **`--no-venv`**: skip the private venv and use system-wide Python
+  packages instead (the launcher falls back to `python3` on `PATH`).
+- **Uninstall**: `sudo ./install.sh --uninstall` — removes code and
+  launcher, keeps config, logs, and PDFs.
+
+### Development mode (git checkout, no install)
+
+```sh
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+cp .env.sample .env && chmod 600 .env
+$EDITOR .env
+./oscar-2fa-provision.sh
 ```
 
 ## Configuration
 
-All settings come from `.env` (or the process environment if running
-under cron / systemd). See `.env.sample` for the full annotated list.
-Important groups:
+Settings are read from the first of: `$CONFIG_DIR/$ENV_FILENAME` (explicit
+override), `/etc/oscar-2fa-provision/oscar-2fa-provision.conf` (installed),
+or `.env` next to the script (development) — or from the process
+environment when running under cron / systemd. See `.env.sample` for the
+full annotated list. Important groups:
 
 | Group | Purpose |
 | --- | --- |
@@ -138,7 +165,8 @@ Important groups:
 ## Usage
 
 ```sh
-./oscar-2fa-provision.sh
+oscar-2fa-provision          # installed
+./oscar-2fa-provision.sh     # from a git checkout
 ```
 
 You'll be prompted:
@@ -186,8 +214,9 @@ from your Nextcloud copy and resend it manually.
 
 ## Audit log format
 
-`logs/provision.log` is a tab-separated append-only file with these
-columns:
+`provision.log` (in `LOG_DIR` — `/var/log/oscar-2fa-provision/` when
+installed, `logs/` in a checkout) is a tab-separated append-only file
+with these columns:
 
 ```
 timestamp  actor  person_id  full_name  accounts_updated
