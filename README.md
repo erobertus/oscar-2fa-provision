@@ -133,12 +133,18 @@ sudo $EDITOR /etc/oscar-2fa-provision/oscar-2fa-provision.conf
   `.conf.sample` is written beside it for diffing).
 - **Migrating from a checkout deployment**: if the checkout has a
   populated `.env` and no `/etc` config exists yet, `install.sh`
-  migrates the `.env` verbatim — all your values (credentials, output
-  paths, Nextcloud dir) are kept. Relative paths like
-  `OUTPUT_DIR=./output` are pinned to their current absolute location,
-  so existing PDFs, logs, and SSH keys stay exactly where they are.
+  migrates the `.env` verbatim (credentials, SMTP, everything), then
+  asks per path parameter — `OUTPUT_DIR`, `LOG_DIR`, `PKEY_FILE` —
+  whether to **[k]eep** the current location, **[m]ove** the existing
+  files to the FHS default and update the config, or (for `OUTPUT_DIR`
+  only) **[d]isable** local PDF copies. Moves are performed by the
+  installer: PDFs, `provision.log*`, or the SSH key (re-`chmod 600`).
+  With `--non-interactive` (or no TTY) everything is kept in place.
   After verifying a run, the old `.env` can be deleted — the wrapper
   prefers the `/etc` config whenever it exists.
+- **`--migrate-paths`**: re-run that keep-or-move review later against
+  the existing `/etc` config (parameters already at their defaults are
+  skipped).
 - **`--no-venv`**: skip the private venv and use system-wide Python
   packages instead (the launcher falls back to `python3` on `PATH`).
 - **Uninstall**: `sudo ./install.sh --uninstall` — removes code and

@@ -161,9 +161,12 @@ oscar-2fa-provision/
 place and **never overwrites an existing config** (it drops a fresh
 `.conf.sample` beside it instead). On first install over an existing
 checkout deployment, the checkout's `.env` is migrated to the `/etc`
-config verbatim, with relative paths (`OUTPUT_DIR`, `LOG_DIR`,
-`PKEY_FILE`, `NEXTCLOUD_DIR`) pinned to their current absolute
-location so nothing moves:
+config verbatim, then each path parameter (`OUTPUT_DIR`, `LOG_DIR`,
+`PKEY_FILE`) gets an interactive keep-or-move choice — "move"
+physically relocates the existing files to the FHS default and updates
+the config; `OUTPUT_DIR` also offers "disable". `--non-interactive`
+(or no TTY) keeps everything in place pinned to absolute paths;
+`--migrate-paths` re-runs the review on an existing config later:
 
 - `/opt/oscar-2fa-provision/` — code, templates, private `.venv`
 - `/usr/local/bin/oscar-2fa-provision` — launcher symlink
