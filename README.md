@@ -127,6 +127,14 @@ sudo $EDITOR /etc/oscar-2fa-provision/oscar-2fa-provision.conf
 - **Upgrade**: `git pull && sudo ./install.sh` — code and venv are
   refreshed; your existing config is never overwritten (a fresh
   `.conf.sample` is written beside it for diffing).
+- **Migrating from a checkout deployment**: if the checkout has a
+  populated `.env` and no `/etc` config exists yet, `install.sh`
+  migrates the `.env` verbatim — all your values (credentials, output
+  paths, Nextcloud dir) are kept. Relative paths like
+  `OUTPUT_DIR=./output` are pinned to their current absolute location,
+  so existing PDFs, logs, and SSH keys stay exactly where they are.
+  After verifying a run, the old `.env` can be deleted — the wrapper
+  prefers the `/etc` config whenever it exists.
 - **`--no-venv`**: skip the private venv and use system-wide Python
   packages instead (the launcher falls back to `python3` on `PATH`).
 - **Uninstall**: `sudo ./install.sh --uninstall` — removes code and

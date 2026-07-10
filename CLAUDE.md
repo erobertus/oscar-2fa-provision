@@ -151,7 +151,11 @@ oscar-2fa-provision/
 
 `install.sh` (run as root) deploys FHS-style; re-running upgrades in
 place and **never overwrites an existing config** (it drops a fresh
-`.conf.sample` beside it instead):
+`.conf.sample` beside it instead). On first install over an existing
+checkout deployment, the checkout's `.env` is migrated to the `/etc`
+config verbatim, with relative paths (`OUTPUT_DIR`, `LOG_DIR`,
+`PKEY_FILE`, `NEXTCLOUD_DIR`) pinned to their current absolute
+location so nothing moves:
 
 - `/opt/oscar-2fa-provision/` — code, templates, private `.venv`
 - `/usr/local/bin/oscar-2fa-provision` — launcher symlink

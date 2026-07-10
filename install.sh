@@ -16,6 +16,12 @@
 #
 # Re-running is safe: code is refreshed, an existing config file is NEVER
 # overwritten (a fresh .sample is placed beside it for diffing).
+#
+# First install on a host that already runs from a git checkout: the
+# checkout's .env is migrated to the /etc config verbatim, except that
+# relative paths (OUTPUT_DIR, LOG_DIR, PKEY_FILE, NEXTCLOUD_DIR) are pinned
+# to their current absolute location so existing output/log/key locations
+# are preserved.
 
 set -eu
 
@@ -99,10 +105,41 @@ sed -e "s|^OUTPUT_DIR=.*|OUTPUT_DIR=$DATA_DIR/output|" \
     "$SRC_DIR/.env.sample" > "$CONF_SAMPLE"
 chmod 640 "$CONF_SAMPLE"
 
+# Rewrite a path variable in $CONF_FILE to an absolute path when its current
+# value is relative. Relative paths in a checkout .env were resolved against
+# the checkout directory; after migration the tool runs from /opt, so they
+# must be pinned to their original absolute location or data would silently
+# move. Handles optional quotes and trailing comments on the value.
+absolutize_var() {
+    _var=$1
+    _val=$(sed -n "s|^${_var}=||p" "$CONF_FILE" | head -1 \
+           | sed 's/[[:space:]]*#.*$//; s/[[:space:]]*$//; s/^"//; s/"$//')
+    case "$_val" in
+        ""|/*) ;;  # empty or already absolute — leave as-is
+        *)
+            _abs=$(readlink -f "$SRC_DIR/$_val" 2>/dev/null || echo "$SRC_DIR/$_val")
+            sed -i "s|^${_var}=.*|${_var}=$_abs|" "$CONF_FILE"
+            echo "  $_var: '$_val' → $_abs (kept pointing at the same location)"
+            ;;
+    esac
+}
+
 if [ ! -f "$CONF_FILE" ]; then
-    cp "$CONF_SAMPLE" "$CONF_FILE"
-    chmod 600 "$CONF_FILE"
-    NEW_CONF=1
+    if [ -f "$SRC_DIR/.env" ]; then
+        # Migrate an existing checkout deployment: keep every configured
+        # value; only relative paths get pinned to their current location.
+        echo "Migrating existing $SRC_DIR/.env to $CONF_FILE ..."
+        cp "$SRC_DIR/.env" "$CONF_FILE"
+        chmod 600 "$CONF_FILE"
+        for v in OUTPUT_DIR LOG_DIR PKEY_FILE NEXTCLOUD_DIR; do
+            absolutize_var "$v"
+        done
+        NEW_CONF=migrated
+    else
+        cp "$CONF_SAMPLE" "$CONF_FILE"
+        chmod 600 "$CONF_FILE"
+        NEW_CONF=1
+    fi
 else
     chmod 600 "$CONF_FILE"
     NEW_CONF=0
@@ -120,6 +157,11 @@ if [ "$NEW_CONF" = "1" ]; then
     echo "NEW INSTALL — edit the config before first use:"
     echo "  ${EDITOR:-vi} $CONF_FILE"
     echo "(DB credentials, SMTP relay, login URL; see comments in the file.)"
+elif [ "$NEW_CONF" = "migrated" ]; then
+    echo ""
+    echo "Migrated your checkout .env to $CONF_FILE — review it, then"
+    echo "the old $SRC_DIR/.env is no longer read and can be removed."
+    echo "(The wrapper now prefers the /etc config whenever it exists.)"
 else
     echo "Existing config kept: $CONF_FILE"
     echo "Fresh sample for diffing: $CONF_SAMPLE"
