@@ -27,10 +27,14 @@ sign-in steps.
 5. In a single transaction, sets `_EYR_2FAenabled = 1`,
    `_EYR_2FASecret = <new>`, and `_EYR_2FAtotp = 'sha256'` on every
    `security` row belonging to that person.
-6. Renders a one-page instruction document — same content goes to:
+6. Renders a one-page instruction document **in memory** — same content
+   goes to:
    - the user's email (HTML body with inline QR + PDF attachment)
-   - a local output directory
+   - an optional local output directory (`OUTPUT_DIR`, off by default —
+     the PDF contains the secret, so keeping a copy is opt-in)
    - an optional Nextcloud directory mounted on the host
+   At least one channel must be available or the script refuses to
+   provision (a secret nobody can see would lock the user out).
 7. Appends an audit-log row recording who provisioned whom and where
    the document went.
 
@@ -97,31 +101,72 @@ this project uses, so the pin is the cleanest fix. If you ever need a
 newer WeasyPrint feature (e.g. for a different project on the same
 host), upgrade Pango first or run that project on a newer host.
 
-## Installation
+## Installation (system-wide)
+
+Install the system packages above first, then:
 
 ```sh
 git clone https://github.com/<you>/oscar-2fa-provision.git
 cd oscar-2fa-provision
-
-# Create a venv and install Python deps
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
+sudo ./install.sh
 
 # Create the dedicated DB user (edit the password first!)
 sudo mysql < sql/01_create_tfa_admin.sql
 
-# Configure
-cp .env.sample .env
-chmod 600 .env
-$EDITOR .env       # fill in DB / SMTP / paths
+# Fill in DB / SMTP / paths
+sudo $EDITOR /etc/oscar-2fa-provision/oscar-2fa-provision.conf
+```
+
+`install.sh` lays the tool out FHS-style:
+
+| Path | Purpose |
+| --- | --- |
+| `/opt/oscar-2fa-provision/` | code, templates, and a private venv with the Python deps |
+| `/usr/local/bin/oscar-2fa-provision` | launcher (symlink) |
+| `/etc/oscar-2fa-provision/oscar-2fa-provision.conf` | configuration (`root:root`, mode `600`) |
+| `/etc/oscar-2fa-provision/ssh/` | SSH tunnel key(s), mode `700` |
+| `/var/log/oscar-2fa-provision/` | audit log |
+| `/var/lib/oscar-2fa-provision/output/` | generated PDFs |
+
+- **Upgrade**: `git pull && sudo ./install.sh` — code and venv are
+  refreshed; your existing config is never overwritten (a fresh
+  `.conf.sample` is written beside it for diffing).
+- **Migrating from a checkout deployment**: if the checkout has a
+  populated `.env` and no `/etc` config exists yet, `install.sh`
+  migrates the `.env` verbatim (credentials, SMTP, everything), then
+  asks per path parameter — `OUTPUT_DIR`, `LOG_DIR`, `PKEY_FILE` —
+  whether to **[k]eep** the current location, **[m]ove** the existing
+  files to the FHS default and update the config, or (for `OUTPUT_DIR`
+  only) **[d]isable** local PDF copies. Moves are performed by the
+  installer: PDFs, `provision.log*`, or the SSH key (re-`chmod 600`).
+  With `--non-interactive` (or no TTY) everything is kept in place.
+  After verifying a run, the old `.env` can be deleted — the wrapper
+  prefers the `/etc` config whenever it exists.
+- **`--migrate-paths`**: re-run that keep-or-move review later against
+  the existing `/etc` config (parameters already at their defaults are
+  skipped).
+- **`--no-venv`**: skip the private venv and use system-wide Python
+  packages instead (the launcher falls back to `python3` on `PATH`).
+- **Uninstall**: `sudo ./install.sh --uninstall` — removes code and
+  launcher, keeps config, logs, and PDFs.
+
+### Development mode (git checkout, no install)
+
+```sh
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+cp .env.sample .env && chmod 600 .env
+$EDITOR .env
+./oscar-2fa-provision.sh
 ```
 
 ## Configuration
 
-All settings come from `.env` (or the process environment if running
-under cron / systemd). See `.env.sample` for the full annotated list.
-Important groups:
+Settings are read from the first of: `$CONFIG_DIR/$ENV_FILENAME` (explicit
+override), `/etc/oscar-2fa-provision/oscar-2fa-provision.conf` (installed),
+or `.env` next to the script (development) — or from the process
+environment when running under cron / systemd. See `.env.sample` for the
+full annotated list. Important groups:
 
 | Group | Purpose |
 | --- | --- |
@@ -131,14 +176,15 @@ Important groups:
 | `CC_ADDRS` | Optional comma-separated list of addresses to CC on every successfully-sent provisioning email (e.g. clinic managers). Leave blank to skip. |
 | `TOTP_*` | Algorithm/digits/period embedded in the QR. SHA-256, 6, 30 by default. |
 | `OSCAR_LOGIN_URL`, `INITIAL_PASSWORD`, `CLINIC_ADMIN_CONTACT` | Strings printed in the user's document. |
-| `OUTPUT_DIR` | Where PDFs are written (always). |
-| `NEXTCLOUD_DIR` | Optional. If set and the directory exists, the PDF is also copied there. |
+| `OUTPUT_DIR` | Optional. If set, a copy of each PDF is kept there. Blank (default) = no local copy — the PDF contains the secret. |
+| `NEXTCLOUD_DIR` | Optional. If set and the directory exists, the PDF is also written there (the recovery-copy channel). |
 | `LOG_DIR` | Where the audit log is appended. |
 
 ## Usage
 
 ```sh
-./oscar-2fa-provision.sh
+oscar-2fa-provision          # installed
+./oscar-2fa-provision.sh     # from a git checkout
 ```
 
 You'll be prompted:
@@ -161,7 +207,7 @@ Search by last name (blank to quit): mosaad
 ──────────────────────────────────────────────────────────────────────
   Provision 2FA for this user? [Y/n] y
 
-  PDF written: ./output/Mosaad_Sonia_78222.pdf
+  OUTPUT_DIR not set — no local PDF copy kept.
   Updated 6 security row(s).
   Email sent to Soniamosaad@gmail.com.
 
@@ -186,8 +232,9 @@ from your Nextcloud copy and resend it manually.
 
 ## Audit log format
 
-`logs/provision.log` is a tab-separated append-only file with these
-columns:
+`provision.log` (in `LOG_DIR` — `/var/log/oscar-2fa-provision/` when
+installed, `logs/` in a checkout) is a tab-separated append-only file
+with these columns:
 
 ```
 timestamp  actor  person_id  full_name  accounts_updated

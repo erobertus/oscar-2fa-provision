@@ -1,0 +1,8 @@
+# Everything deployed to Helium must keep LF even when checked out on
+# Windows — CRLF breaks the shebang (`/bin/sh^M`) and sourced configs.
+*.sh    text eol=lf
+*.py    text eol=lf
+*.sql   text eol=lf
+*.html  text eol=lf
+.env.sample text eol=lf
+requirements.txt text eol=lf

@@ -8,8 +8,14 @@ time; the rest of the codebase imports them as constants.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Anchor for default paths: the app's own directory, NOT the caller's CWD.
+# The wrapper cd's here anyway, but this keeps `python3 main.py` from an
+# arbitrary directory from scattering output/ and logs/ wherever it's run.
+_APP_DIR = Path(__file__).resolve().parent
 
 # Load .env from the script's directory (no-op if variables are already set
 # in the execution environment, e.g. when launched from systemd or cron with
@@ -100,9 +106,12 @@ CLINIC_ADMIN_CONTACT = os.getenv(
 )
 
 # --- Output destinations -----------------------------------------------------
-OUTPUT_DIR = os.getenv("OUTPUT_DIR", "./output")
-NEXTCLOUD_DIR = os.getenv("NEXTCLOUD_DIR", "")  # optional
-LOG_DIR = os.getenv("LOG_DIR", "./logs")
+# OUTPUT_DIR and NEXTCLOUD_DIR are both optional destinations for the
+# secret-bearing PDF; blank means "don't persist a copy there". The audit
+# log always has a home — it contains no secrets.
+OUTPUT_DIR = os.getenv("OUTPUT_DIR", "")
+NEXTCLOUD_DIR = os.getenv("NEXTCLOUD_DIR", "")
+LOG_DIR = os.getenv("LOG_DIR", "") or str(_APP_DIR / "logs")
 
 # --- Misc --------------------------------------------------------------------
 VERBOSE = _int("VERBOSE", 1)

@@ -7,7 +7,6 @@ live in main.py.
 
 from __future__ import annotations
 
-import shutil
 import smtplib
 import ssl
 from email.message import EmailMessage
@@ -30,7 +29,8 @@ def send_email(
     text_body: str,
     qr_png: bytes,
     qr_cid: str,
-    pdf_attachment: Optional[Path] = None,
+    pdf_bytes: Optional[bytes] = None,
+    pdf_filename: str = "instructions.pdf",
     cc_addrs: Optional[List[str]] = None,
 ) -> None:
     """Send a multipart/alternative email with an inline QR + optional PDF.
@@ -62,12 +62,13 @@ def send_email(
     )
 
     # PDF attachment: a separate, downloadable copy of the same content.
-    if pdf_attachment is not None and pdf_attachment.exists():
+    # Attached from memory — the PDF need not exist anywhere on disk.
+    if pdf_bytes is not None:
         msg.add_attachment(
-            pdf_attachment.read_bytes(),
+            pdf_bytes,
             maintype="application",
             subtype="pdf",
-            filename=pdf_attachment.name,
+            filename=pdf_filename,
         )
 
     # Open the appropriate flavour of SMTP connection.
@@ -90,22 +91,34 @@ def send_email(
             s.send_message(msg)
 
 
-def copy_to_nextcloud(pdf_path: Path, nextcloud_dir: str) -> Optional[Path]:
-    """Copy `pdf_path` into `nextcloud_dir` if the dir is set and exists.
+def save_pdf(
+    pdf_bytes: bytes,
+    dest_dir: str,
+    filename: str,
+    *,
+    create_dir: bool = False,
+) -> Optional[Path]:
+    """Write `pdf_bytes` into `dest_dir` if the destination is configured.
+
+    Used for both OUTPUT_DIR (create_dir=True: a local folder we own) and
+    NEXTCLOUD_DIR (create_dir=False: an external mount that must already
+    exist — creating it would silently write to a dead mountpoint).
 
     Returns the destination path on success, or None if the destination
-    isn't configured. Raises if it's configured but unwritable.
+    isn't configured. Raises if it's configured but unusable.
     """
-    if not nextcloud_dir:
+    if not dest_dir:
         return None
-    dest_dir = Path(nextcloud_dir)
-    if not dest_dir.exists():
+    d = Path(dest_dir).expanduser()
+    if create_dir:
+        d.mkdir(parents=True, exist_ok=True)
+    elif not d.exists():
         raise FileNotFoundError(
-            f"NEXTCLOUD_DIR is set to {nextcloud_dir} but the directory "
-            f"doesn't exist on this host."
+            f"Destination is set to {dest_dir} but the directory doesn't "
+            f"exist on this host."
         )
-    if not dest_dir.is_dir():
-        raise NotADirectoryError(f"NEXTCLOUD_DIR {nextcloud_dir} is not a directory.")
-    dest = dest_dir / pdf_path.name
-    shutil.copy2(pdf_path, dest)
+    if not d.is_dir():
+        raise NotADirectoryError(f"Destination {dest_dir} is not a directory.")
+    dest = d / filename
+    dest.write_bytes(pdf_bytes)
     return dest

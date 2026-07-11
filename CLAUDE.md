@@ -74,6 +74,14 @@ base64 data URI for the PDF. Both derive from a single
 have been tuned carefully; don't add sections without checking the
 overflow.
 
+The PDF is rendered **in memory** (`render_pdf_bytes`) and contains the
+TOTP secret, so persisting it anywhere is opt-in: `OUTPUT_DIR` (blank
+by default) and `NEXTCLOUD_DIR` are both optional destinations, and the
+email attaches the bytes directly. `main()` refuses to provision when
+no delivery channel exists at all (no email possible, both dirs blank)
+— a written secret nobody can see would lock the user out. Don't
+reintroduce an unconditional disk write.
+
 ### Re-issuance
 If `_EYR_2FAenabled=1` already for any of a Person's accounts, the
 script prints a **yellow warning + bold red REPLACE** in the confirm
@@ -126,7 +134,8 @@ oscar-2fa-provision/
 ├── requirements.txt                # WeasyPrint pinned to 52.5
 ├── .env.sample                     # annotated config template
 ├── .gitignore                      # blocks .env, ssh/*, output/, logs/
-├── oscar-2fa-provision.sh          # wrapper: env loader + python3 main.py
+├── install.sh                      # root installer: /opt + /etc + /var layout
+├── oscar-2fa-provision.sh          # wrapper: config resolution + venv-aware exec
 ├── main.py                         # interactive orchestrator
 ├── db_config.py                    # os.getenv → module constants
 ├── db_connection.py                # direct + SSH tunnel connect, adapted from auto-billing
@@ -145,6 +154,38 @@ oscar-2fa-provision/
 ├── output/                         # generated PDFs go here (gitignored)
 └── logs/                           # audit log goes here (gitignored)
 ```
+
+## Installed layout (production)
+
+`install.sh` (run as root) deploys FHS-style; re-running upgrades in
+place and **never overwrites an existing config** (it drops a fresh
+`.conf.sample` beside it instead). On first install over an existing
+checkout deployment, the checkout's `.env` is migrated to the `/etc`
+config verbatim, then each path parameter (`OUTPUT_DIR`, `LOG_DIR`,
+`PKEY_FILE`) gets an interactive keep-or-move choice — "move"
+physically relocates the existing files to the FHS default and updates
+the config; `OUTPUT_DIR` also offers "disable". `--non-interactive`
+(or no TTY) keeps everything in place pinned to absolute paths;
+`--migrate-paths` re-runs the review on an existing config later:
+
+- `/opt/oscar-2fa-provision/` — code, templates, private `.venv`
+- `/usr/local/bin/oscar-2fa-provision` — launcher symlink
+- `/etc/oscar-2fa-provision/oscar-2fa-provision.conf` — config, root:root `600`
+- `/etc/oscar-2fa-provision/ssh/` — tunnel keys, `700`
+- `/var/log/oscar-2fa-provision/` — audit log
+- `/var/lib/oscar-2fa-provision/output/` — generated PDFs, IF the admin
+  opts in by setting `OUTPUT_DIR` (blank by default — the PDF carries
+  the secret)
+
+The wrapper resolves config in this order: `$CONFIG_DIR/$ENV_FILENAME`
+override → the `/etc` conf if present → `.env` next to the script (dev
+mode). It prefers `<script dir>/.venv/bin/python3` over system
+`python3`. The `/etc` conf is sourced shell-style like `.env`, so the
+same quoting rules apply. When adding a config variable, update
+`.env.sample` — the installer generates the installed sample from it
+(rewriting `OUTPUT_DIR`, `LOG_DIR`, `PKEY_FILE` to absolute paths via
+`sed`, so keep those three as simple `KEY=value` lines). When adding a
+new runtime file, add it to the copy list in `install.sh` too.
 
 ## Conventions to preserve
 
@@ -190,7 +231,9 @@ oscar-2fa-provision/
 
 ## Delivery preference
 
-Deliver code changes as a zip file (via `present_files`). The user
-extracts on their local Windows machine, reviews, and pushes to GitHub
-themselves. Do not paste 200-line files inline unless asked; a single
-zip with all changes is preferred.
+Deliver code changes as **git commits on the session branch** — never
+as zip files (the old zip workflow was a claude.ai-Projects-era
+artifact; the whole point of moving to Code sessions is git
+versioning). Commit with clear messages, summarize the commits in the
+reply, and let the user merge and push to GitHub (`erobertus`)
+himself. Do not paste long files inline unless asked.
