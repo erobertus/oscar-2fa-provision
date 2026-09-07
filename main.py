@@ -28,7 +28,7 @@ import db_config as cfg
 import term
 from audit import write_event
 from db_connection import connect_to_database
-from distribute import save_pdf, send_email
+from distribute import save_pdf, send_email, upload_webdav
 from document import DocumentContext, render_html, render_pdf_bytes, render_plain_text
 from provider import Person, search_by_lastname
 from qr import render_qr_png_bytes
@@ -311,6 +311,8 @@ def main() -> int:
             channels.append(f"email to {person.email}")
         if cfg.OUTPUT_DIR:
             channels.append(f"local copy in {cfg.OUTPUT_DIR}")
+        if cfg.WEBDAV_URL:
+            channels.append(f"WebDAV upload to {cfg.WEBDAV_URL}")
         if cfg.NEXTCLOUD_DIR:
             channels.append(f"copy in {cfg.NEXTCLOUD_DIR}")
 
@@ -326,7 +328,8 @@ def main() -> int:
         if not channels and not args.dry_run:
             term.say_err(
                 "  No delivery channel for the instruction document: email is "
-                "unavailable and neither OUTPUT_DIR nor NEXTCLOUD_DIR is set."
+                "unavailable and none of OUTPUT_DIR, WEBDAV_URL, or "
+                "NEXTCLOUD_DIR is set."
             )
             term.say_err("  Refusing to provision. Configure at least one channel.")
             return 1
@@ -418,7 +421,23 @@ def main() -> int:
         elif not cfg.SMTP_HOST or not cfg.FROM_ADDR:
             term.say_dim("  Skipping email — SMTP_HOST or FROM_ADDR not configured.")
 
-        # Step 6b: Nextcloud
+        # Step 6b: WebDAV upload (preferred remote-copy channel)
+        webdav_dest = ""
+        if not args.dry_run and cfg.WEBDAV_URL:
+            try:
+                webdav_dest = upload_webdav(
+                    pdf_bytes,
+                    pdf_filename,
+                    url=cfg.WEBDAV_URL,
+                    user=cfg.WEBDAV_USER,
+                    password=cfg.WEBDAV_PASSWORD,
+                    verify_tls=cfg.WEBDAV_VERIFY_TLS,
+                )
+                term.say_ok(f"  WebDAV upload: {webdav_dest}")
+            except Exception as e:
+                term.say_err(f"  ERROR: WebDAV upload failed: {e}")
+
+        # Step 6c: Nextcloud mount copy (legacy — prefer WEBDAV_URL)
         nextcloud_path: Optional[Path] = None
         if not args.dry_run and cfg.NEXTCLOUD_DIR:
             try:
@@ -430,7 +449,16 @@ def main() -> int:
             except Exception as e:
                 term.say_err(f"  ERROR: Nextcloud copy failed: {e}")
 
-        # Step 7: audit log
+        # Step 7: audit log. The remote-copy column records every remote
+        # destination that succeeded (WebDAV URL and/or mount path).
+        remote_copies = "; ".join(
+            dest
+            for dest in (
+                webdav_dest,
+                str(nextcloud_path) if nextcloud_path else "",
+            )
+            if dest
+        )
         write_event(
             cfg.LOG_DIR,
             actor=os.getenv("SUDO_USER") or getpass.getuser(),
@@ -438,7 +466,7 @@ def main() -> int:
             full_name=person.full_name,
             accounts_updated=updated,
             email_sent_to=email_destination,
-            nextcloud_copy=str(nextcloud_path) if nextcloud_path else "",
+            nextcloud_copy=remote_copies,
             dry_run=args.dry_run,
         )
 

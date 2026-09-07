@@ -76,18 +76,28 @@ overflow.
 
 The PDF is rendered **in memory** (`render_pdf_bytes`) and contains the
 TOTP secret, so persisting it anywhere is opt-in: `OUTPUT_DIR` (blank
-by default) and `NEXTCLOUD_DIR` are both optional destinations, and the
-email attaches the bytes directly. `main()` refuses to provision when
-no delivery channel exists at all (no email possible, both dirs blank)
-— a written secret nobody can see would lock the user out. Don't
-reintroduce an unconditional disk write.
+by default), `WEBDAV_URL`, and `NEXTCLOUD_DIR` are all optional
+destinations, and the email attaches the bytes directly. `main()`
+refuses to provision when no delivery channel exists at all — a written
+secret nobody can see would lock the user out. Don't reintroduce an
+unconditional disk write.
+
+The **WebDAV upload** (`upload_webdav` in `distribute.py`, stdlib
+urllib only — no new dependency) is the preferred recovery-copy
+channel: a direct HTTP PUT to e.g. Nextcloud's
+`remote.php/dav/files/<user>/<folder>`, TLS-verified by default
+(`WEBDAV_VERIFY_TLS=false` is the deliberate opt-out for self-signed
+certs). `NEXTCLOUD_DIR` (mount-based copy) is **legacy** — kept
+working, but docs must keep steering users to WebDAV; FUSE mounts
+misbehave in Proxmox LXC containers.
 
 ### Re-issuance
 If `_EYR_2FAenabled=1` already for any of a Person's accounts, the
 script prints a **yellow warning + bold red REPLACE** in the confirm
 prompt and requires an explicit `y` (default is `N`). Same code path
-otherwise. The Nextcloud copy is the intended recovery-copy channel
-for "user lost their phone" cases — the tool isn't needed for that.
+otherwise. The remote copy (WebDAV upload, or the legacy Nextcloud
+mount) is the intended recovery-copy channel for "user lost their
+phone" cases — the tool isn't needed for that.
 
 ## Technical constraints (things that will bite you)
 
@@ -107,7 +117,8 @@ The wrapper (`oscar-2fa-provision.sh`) sources `.env` via
 `set -a; . "$ENV_PATH"; set +a`, i.e. shell-style parsing. Any value
 containing spaces, quotes, or shell metacharacters MUST be quoted in
 `.env.sample`. Current quoted values: `FROM_FRIENDLY`, `TOTP_ISSUER`,
-`CLINIC_ADMIN_CONTACT`. Add quotes to any new one with spaces.
+`CLINIC_ADMIN_CONTACT`, `WEBDAV_PASSWORD` (always — app passwords can
+contain metacharacters). Add quotes to any new one with spaces.
 
 ### `provider_no` is a varchar
 When comparing numerically, always `CAST(p.provider_no AS SIGNED)`.
