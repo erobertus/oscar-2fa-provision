@@ -32,7 +32,10 @@ sign-in steps.
    - the user's email (HTML body with inline QR + PDF attachment)
    - an optional local output directory (`OUTPUT_DIR`, off by default —
      the PDF contains the secret, so keeping a copy is opt-in)
-   - an optional Nextcloud directory mounted on the host
+   - an optional WebDAV upload (`WEBDAV_URL`, e.g. a Nextcloud folder —
+     the preferred recovery-copy channel; a direct HTTP PUT, no mount)
+   - a directory mounted on the host (`NEXTCLOUD_DIR`, legacy — prefer
+     the WebDAV upload)
    At least one channel must be available or the script refuses to
    provision (a secret nobody can see would lock the user out).
 7. Appends an audit-log row recording who provisioned whom and where
@@ -177,7 +180,9 @@ full annotated list. Important groups:
 | `TOTP_*` | Algorithm/digits/period embedded in the QR. SHA-256, 6, 30 by default. |
 | `OSCAR_LOGIN_URL`, `INITIAL_PASSWORD`, `CLINIC_ADMIN_CONTACT` | Strings printed in the user's document. |
 | `OUTPUT_DIR` | Optional. If set, a copy of each PDF is kept there. Blank (default) = no local copy — the PDF contains the secret. |
-| `NEXTCLOUD_DIR` | Optional. If set and the directory exists, the PDF is also written there (the recovery-copy channel). |
+| `WEBDAV_URL`, `WEBDAV_USER`, `WEBDAV_PASSWORD` | **Preferred recovery-copy channel.** Direct HTTP PUT of the PDF to a WebDAV folder (for Nextcloud: `https://<host>/remote.php/dav/files/<user>/<folder>`, with an app password). The folder must already exist. Blank `WEBDAV_URL` = disabled. |
+| `WEBDAV_VERIFY_TLS` | Verify the server certificate (default `true`). Set `false` only for a trusted self-signed cert. |
+| `NEXTCLOUD_DIR` | **Legacy** — prefer `WEBDAV_URL`. Writes the PDF into a directory mounted on the host; kept for setups that still rely on a FUSE/davfs mount (which can misbehave, e.g. in Proxmox LXC containers). |
 | `LOG_DIR` | Where the audit log is appended. |
 
 ## Usage
@@ -228,7 +233,8 @@ invalidates the old authenticator entry immediately.
 
 For the common case where a user's phone is wiped but the secret is
 known to be safe, you don't need this script — fetch the existing PDF
-from your Nextcloud copy and resend it manually.
+from your recovery copy (the WebDAV folder, or the legacy Nextcloud
+mount) and resend it manually.
 
 ## Audit log format
 
@@ -244,6 +250,10 @@ email_sent_to  nextcloud_copy  dry_run  notes
 `person_id` is the `practitionerNo` for grouped multi-office doctors,
 or `p:<provider_no>` for standalone accounts — the prefix keeps the
 two namespaces visually distinct.
+
+The `nextcloud_copy` column (name kept for compatibility with existing
+logs) records every remote copy that succeeded: the WebDAV destination
+URL and/or the mount path, `;`-separated when both are configured.
 
 The secret itself is **never** written to the log.
 

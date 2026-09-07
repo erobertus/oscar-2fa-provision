@@ -106,12 +106,21 @@ CLINIC_ADMIN_CONTACT = os.getenv(
 )
 
 # --- Output destinations -----------------------------------------------------
-# OUTPUT_DIR and NEXTCLOUD_DIR are both optional destinations for the
-# secret-bearing PDF; blank means "don't persist a copy there". The audit
+# OUTPUT_DIR, NEXTCLOUD_DIR, and WEBDAV_URL are all optional destinations for
+# the secret-bearing PDF; blank means "don't persist a copy there". The audit
 # log always has a home — it contains no secrets.
 OUTPUT_DIR = os.getenv("OUTPUT_DIR", "")
-NEXTCLOUD_DIR = os.getenv("NEXTCLOUD_DIR", "")
+NEXTCLOUD_DIR = os.getenv("NEXTCLOUD_DIR", "")  # legacy: prefer WEBDAV_URL
 LOG_DIR = os.getenv("LOG_DIR", "") or str(_APP_DIR / "logs")
+
+# --- WebDAV upload -----------------------------------------------------------
+# Preferred remote-copy channel: a direct HTTP PUT to a WebDAV endpoint
+# (e.g. Nextcloud's remote.php/dav/files/<user>/<folder>), replacing the
+# legacy NEXTCLOUD_DIR FUSE-mount copy. Blank WEBDAV_URL disables it.
+WEBDAV_URL = os.getenv("WEBDAV_URL", "").strip().rstrip("/")
+WEBDAV_USER = os.getenv("WEBDAV_USER", "")
+WEBDAV_PASSWORD = os.getenv("WEBDAV_PASSWORD", "")
+WEBDAV_VERIFY_TLS = _bool("WEBDAV_VERIFY_TLS", True)
 
 # --- Misc --------------------------------------------------------------------
 VERBOSE = _int("VERBOSE", 1)

@@ -1,4 +1,5 @@
-"""Distribution: email the document, copy it to Nextcloud (if configured).
+"""Distribution: email the document, upload it via WebDAV, or copy it
+to a mounted directory (legacy Nextcloud-mount channel).
 
 This module is intentionally narrow — each function does one delivery
 channel and reports back what it did. Sequencing and error handling
@@ -7,8 +8,12 @@ live in main.py.
 
 from __future__ import annotations
 
+import base64
 import smtplib
 import ssl
+import urllib.error
+import urllib.parse
+import urllib.request
 from email.message import EmailMessage
 from pathlib import Path
 from typing import List, Optional
@@ -89,6 +94,58 @@ def send_email(
             if smtp_user:
                 s.login(smtp_user, smtp_password)
             s.send_message(msg)
+
+
+def upload_webdav(
+    pdf_bytes: bytes,
+    filename: str,
+    *,
+    url: str,
+    user: str = "",
+    password: str = "",
+    verify_tls: bool = True,
+    timeout: int = 30,
+) -> str:
+    """PUT `pdf_bytes` to `<url>/<filename>` on a WebDAV server.
+
+    Built for Nextcloud (`https://<host>/remote.php/dav/files/<user>/<folder>`)
+    but works against any WebDAV endpoint. The target collection (folder)
+    must already exist — a missing one is an error, never silently created,
+    mirroring the dead-mountpoint protection of the directory channel.
+
+    Returns the destination URL (credential-free, safe to log/audit).
+    Raises on any HTTP or transport failure.
+    """
+    dest = url.rstrip("/") + "/" + urllib.parse.quote(filename)
+    req = urllib.request.Request(dest, data=pdf_bytes, method="PUT")
+    req.add_header("Content-Type", "application/pdf")
+    if user:
+        token = base64.b64encode(
+            f"{user}:{password}".encode("utf-8")
+        ).decode("ascii")
+        req.add_header("Authorization", f"Basic {token}")
+
+    context = ssl.create_default_context()
+    if not verify_tls:
+        # Opt-out for self-signed certificates. The upload carries the TOTP
+        # secret, so this stays a deliberate config choice, never a fallback.
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=context) as resp:
+            # 201 = created, 204 = overwrote an existing file. Anything else
+            # that didn't raise is unexpected enough to refuse to call success.
+            if resp.status not in (200, 201, 204):
+                raise RuntimeError(f"server answered HTTP {resp.status}")
+    except urllib.error.HTTPError as e:
+        hint = ""
+        if e.code == 401:
+            hint = " (check WEBDAV_USER / WEBDAV_PASSWORD — use an app password)"
+        elif e.code in (404, 409):
+            hint = " (the target folder must already exist on the server)"
+        raise RuntimeError(f"HTTP {e.code} {e.reason}{hint}") from e
+    return dest
 
 
 def save_pdf(
